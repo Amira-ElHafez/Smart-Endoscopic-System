@@ -1,5 +1,0 @@
-opencv-python
-PyQt5
-numpy
-scikit-image
-requests
