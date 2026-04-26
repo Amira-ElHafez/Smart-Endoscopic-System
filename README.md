@@ -52,15 +52,12 @@ The project is structured into modular components for scalability:
 * NumPy
 
 ### Installation
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/YourUsername/Endoscopic-Assistance-System.git](https://github.com/YourUsername/Endoscopic-Assistance-System.git)
-    ```
-2.  **Install dependencies:**
+
+1.  **Install dependencies:**
     ```bash
     pip install opencv-python PyQt5 numpy
     ```
-3.  **Run the application:**
+2.  **Run the application:**
     ```bash
     python main.py
     ```
