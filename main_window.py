@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QSlider, QGroupBox, QComboBox,
     QStatusBar, QGridLayout, QCheckBox, QFileDialog, QMessageBox,
+    QSizePolicy
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap, QFont, QKeyEvent
@@ -28,13 +29,13 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Intelligent Endoscopic Assistance System — SBE3220")
         self.setMinimumSize(1300, 800)
 
-        # ── Core modules ────────────────────────────────────────────────────
+        # -- Core modules ----------------------------------------------------
         self.illumination = IlluminationController()
         self.processor    = ImageProcessor()
         self.navigation   = NavigationController()
         self.extractor    = FeatureExtractor()
 
-        # ── State ────────────────────────────────────────────────────────────
+        # -- State ------------------------------------------------------------
         self.cap            = None      # cv2.VideoCapture
         self.using_camera   = False
         self.is_running     = False
@@ -57,15 +58,15 @@ class MainWindow(QMainWindow):
 
         self.status("Ready — load a video/image or connect camera.")
 
-    # ════════════════════════════════════════════════════════════════════════
+    # ========================================================================
     # UI Construction
-    # ════════════════════════════════════════════════════════════════════════
+    # ========================================================================
 
     def _build_ui(self):
         root_w  = QWidget();  self.setCentralWidget(root_w)
         root_lyt = QHBoxLayout(root_w)
-        root_lyt.setContentsMargins(8, 8, 8, 8)
-        root_lyt.setSpacing(8)
+        root_lyt.setContentsMargins(16, 16, 16, 16)
+        root_lyt.setSpacing(16)
 
         root_lyt.addWidget(self._panel_controls(),  stretch=0)
         root_lyt.addWidget(self._panel_display(),   stretch=1)
@@ -74,174 +75,241 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
 
-    # ── Left panel ─────────────────────────────────────────────────────────
+    # -- Left panel ---------------------------------------------------------
     def _panel_controls(self):
-        w = QWidget(); w.setFixedWidth(245)
-        lay = QVBoxLayout(w); lay.setContentsMargins(0,0,0,0); lay.setSpacing(10)
+        w = QWidget(); w.setFixedWidth(270)
+        lay = QVBoxLayout(w); lay.setContentsMargins(0,0,0,0); lay.setSpacing(12)
 
-        # Source
-        g = QGroupBox("Source"); gl = QVBoxLayout(g)
+        # Source Controls
+        g = QGroupBox("Source Controls"); gl = QVBoxLayout(g)
         self.btn_camera     = QPushButton("Connect Camera"); self.btn_camera.setCheckable(True)
         self.btn_load_video = QPushButton("Load Video")
         self.btn_load_image = QPushButton("Load Image")
-        self.btn_stop       = QPushButton("Stop"); self.btn_stop.setEnabled(False)
-        for b in [self.btn_camera, self.btn_load_video, self.btn_load_image, self.btn_stop]:
+        self.btn_play_pause = QPushButton("⏸ Pause"); self.btn_play_pause.setEnabled(False)
+
+        for b in [self.btn_camera, self.btn_load_video, self.btn_load_image, self.btn_play_pause]:
             gl.addWidget(b)
         lay.addWidget(g)
 
-        # Illumination
-        g = QGroupBox("Illumination"); gl = QVBoxLayout(g)
-        gl.addWidget(QLabel("Brightness (LED intensity)"))
+        # Illumination Settings
+        g = QGroupBox("Illumination Settings"); gl = QVBoxLayout(g)
+
+        row_b = QHBoxLayout()
+        row_b.addWidget(QLabel("Brightness"));
+        self.lbl_bright = QLabel("100 %"); self.lbl_bright.setAlignment(Qt.AlignRight)
+        row_b.addWidget(self.lbl_bright)
+        gl.addLayout(row_b)
         self.sl_bright = QSlider(Qt.Horizontal); self.sl_bright.setRange(0, 200); self.sl_bright.setValue(100)
-        self.lbl_bright = QLabel("100 %")
-        gl.addWidget(self.sl_bright); gl.addWidget(self.lbl_bright)
-        gl.addWidget(QLabel("Contrast"))
+        gl.addWidget(self.sl_bright)
+
+        row_c = QHBoxLayout()
+        row_c.addWidget(QLabel("Contrast"));
+        self.lbl_contrast = QLabel("100 %"); self.lbl_contrast.setAlignment(Qt.AlignRight)
+        row_c.addWidget(self.lbl_contrast)
+        gl.addLayout(row_c)
         self.sl_contrast = QSlider(Qt.Horizontal); self.sl_contrast.setRange(0, 200); self.sl_contrast.setValue(100)
-        self.lbl_contrast = QLabel("100 %")
-        gl.addWidget(self.sl_contrast); gl.addWidget(self.lbl_contrast)
+        gl.addWidget(self.sl_contrast)
         lay.addWidget(g)
 
-        # Navigation
-        g = QGroupBox("Navigation  (W A S D / Arrows)"); gl = QGridLayout(g)
+        # Navigation (W A S D / Arrows / + -)
+        g = QGroupBox("Navigation (W A S D / + -)"); gl = QGridLayout(g)
         self.btn_up    = self._nav_btn("▲"); self.btn_down  = self._nav_btn("▼")
         self.btn_left  = self._nav_btn("◄"); self.btn_right = self._nav_btn("►")
         self.btn_reset = self._nav_btn("●"); self.btn_reset.setToolTip("Reset to center")
-        gl.addWidget(self.btn_up,    0, 1)
-        gl.addWidget(self.btn_left,  1, 0)
-        gl.addWidget(self.btn_reset, 1, 1)
-        gl.addWidget(self.btn_right, 1, 2)
-        gl.addWidget(self.btn_down,  2, 1)
-        self.lbl_nav = QLabel("Position: (0, 0)"); self.lbl_nav.setAlignment(Qt.AlignCenter)
+
+        # Zoom Buttons
+        self.btn_zoom_in  = self._nav_btn("➕"); self.btn_zoom_in.setToolTip("Zoom In")
+        self.btn_zoom_out = self._nav_btn("➖"); self.btn_zoom_out.setToolTip("Zoom Out")
+
+        gl.addWidget(self.btn_zoom_out, 0, 0, Qt.AlignCenter)
+        gl.addWidget(self.btn_up,       0, 1, Qt.AlignCenter)
+        gl.addWidget(self.btn_zoom_in,  0, 2, Qt.AlignCenter)
+        gl.addWidget(self.btn_left,     1, 0, Qt.AlignCenter)
+        gl.addWidget(self.btn_reset,    1, 1, Qt.AlignCenter)
+        gl.addWidget(self.btn_right,    1, 2, Qt.AlignCenter)
+        gl.addWidget(self.btn_down,     2, 1, Qt.AlignCenter)
+
+        self.lbl_nav = QLabel("Pos: (0, 0)  |  Zoom: 1.0x")
+        self.lbl_nav.setAlignment(Qt.AlignCenter)
+        self.lbl_nav.setStyleSheet("color: #9ca3af; margin-top: 8px;")
         gl.addWidget(self.lbl_nav, 3, 0, 1, 3)
         lay.addWidget(g)
 
-        # Processing
-        g = QGroupBox("Processing"); gl = QVBoxLayout(g)
-        self.chk_denoise = QCheckBox("Noise Reduction  (Gaussian)"); self.chk_denoise.setChecked(True)
-        self.chk_clahe   = QCheckBox("CLAHE  Contrast Enhancement"); self.chk_clahe.setChecked(True)
-        self.chk_edges   = QCheckBox("Edge Detection  (Canny)")
+        # Image Enhancement Processing
+        g = QGroupBox("Image Enhancement"); gl = QVBoxLayout(g)
+        self.chk_denoise = QCheckBox("Noise Reduction (Gaussian)"); self.chk_denoise.setChecked(True)
+        self.chk_clahe   = QCheckBox("CLAHE Contrast Boost"); self.chk_clahe.setChecked(True)
+        self.chk_edges   = QCheckBox("Edge Detection (Canny)")
         gl.addWidget(self.chk_denoise); gl.addWidget(self.chk_clahe); gl.addWidget(self.chk_edges)
-        gl.addWidget(QLabel("Pseudo-color map:"))
+
+        gl.addWidget(QLabel("Pseudo-color Map:"))
         self.cmb_cmap = QComboBox()
         self.cmb_cmap.addItems(["None", "Jet", "Hot", "Cool", "Bone", "HSV"])
         gl.addWidget(self.cmb_cmap)
-        lay.addWidget(g)
-
-        # Capture
-        g = QGroupBox("Capture"); gl = QVBoxLayout(g)
-        self.btn_capture = QPushButton("📷  Capture Frame  [Space]"); self.btn_capture.setEnabled(False)
-        gl.addWidget(self.btn_capture)
         lay.addWidget(g)
 
         lay.addStretch()
         return w
 
     def _nav_btn(self, text):
-        b = QPushButton(text); b.setFixedSize(44, 44); return b
+        b = QPushButton(text)
+        b.setFixedSize(45, 45)
+        b.setStyleSheet("""
+            QPushButton {
+                font-size: 16px;
+                background-color: #1f2937;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #3b82f6;
+            }
+            QPushButton:pressed {
+                background-color: #2563eb;
+            }
+        """)
+        return b
 
-    # ── Centre display ─────────────────────────────────────────────────────
+    # -- Centre display -----------------------------------------------------
     def _panel_display(self):
         w = QWidget(); lay = QVBoxLayout(w)
-        lay.setContentsMargins(0,0,0,0); lay.setSpacing(6)
+        lay.setContentsMargins(0,0,0,0); lay.setSpacing(12)
 
-        title = QLabel("Real-time Endoscopic Feed")
-        title.setFont(QFont("Arial", 11, QFont.Bold))
-        title.setAlignment(Qt.AlignCenter)
-        lay.addWidget(title)
+        header = QHBoxLayout()
+        title = QLabel("LIVE ENDOSCOPIC FEED")
+        title.setFont(QFont("Segoe UI", 16, QFont.Bold))
+        title.setStyleSheet("color: #f3f4f6; letter-spacing: 2px;")
+
+        self.btn_capture = QPushButton("📷 Capture Frame")
+        self.btn_capture.setEnabled(False)
+        self.btn_capture.setFixedSize(140, 36)
+        self.btn_capture.setStyleSheet("background-color: #059669; border:none; border-radius: 6px;")
+
+        header.addWidget(title)
+        header.addStretch()
+        header.addWidget(self.btn_capture)
+        lay.addLayout(header)
 
         row = QHBoxLayout()
         def video_col(label_text, attr_name):
             col = QVBoxLayout()
-            lbl_hdr = QLabel(label_text); lbl_hdr.setAlignment(Qt.AlignCenter)
-            lbl_hdr.setStyleSheet("color:#aaa;font-size:11px;")
+            lbl_hdr = QLabel(label_text.upper()); lbl_hdr.setAlignment(Qt.AlignCenter)
+            lbl_hdr.setStyleSheet("color: #9ca3af; font-size: 12px; font-weight: bold; letter-spacing: 1px;")
+
             lbl_vid = QLabel(); lbl_vid.setAlignment(Qt.AlignCenter)
             lbl_vid.setMinimumSize(480, 360)
-            lbl_vid.setStyleSheet("background:#111;border-radius:6px;")
-            lbl_vid.setText("No source")
+
+            lbl_vid.setStyleSheet("""
+                background-color: #000000;
+                border: 2px solid #1f2937;
+                border-radius: 12px;
+                color: #4b5563;
+                font-size: 14px;
+            """)
+            lbl_vid.setText("NO SIGNAL")
+
             col.addWidget(lbl_hdr); col.addWidget(lbl_vid)
             setattr(self, attr_name, lbl_vid)
             return col
 
-        row.addLayout(video_col("Original  (illumination + navigation)", "lbl_orig"))
-        row.addLayout(video_col("Processed", "lbl_proc"))
+        row.addLayout(video_col("Original Camera Feed", "lbl_orig"))
+        row.addLayout(video_col("Processed Feed", "lbl_proc"))
         lay.addLayout(row)
 
-        self.lbl_overlay = QLabel("◉  Center"); self.lbl_overlay.setAlignment(Qt.AlignCenter)
-        self.lbl_overlay.setStyleSheet("color:#0af;font-size:12px;")
-        lay.addWidget(self.lbl_overlay)
+        info_lyt = QHBoxLayout()
+        self.lbl_overlay = QLabel("◉ X: +0  Y: +0  Tilt: 0°  Zoom: 1.0x")
+        self.lbl_overlay.setStyleSheet("color: #3b82f6; font-size: 14px; font-weight: bold;")
 
-        self.lbl_info = QLabel("FPS: — | Frame: 0 | Size: —")
-        self.lbl_info.setAlignment(Qt.AlignCenter)
-        self.lbl_info.setStyleSheet("color:#666;font-size:11px;")
-        lay.addWidget(self.lbl_info)
+        self.lbl_info = QLabel("FPS: --  |  Frame: 0  |  Size: --")
+        self.lbl_info.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.lbl_info.setStyleSheet("color: #6b7280; font-size: 13px; font-family: monospace;")
+
+        info_lyt.addWidget(self.lbl_overlay)
+        info_lyt.addWidget(self.lbl_info)
+        lay.addLayout(info_lyt)
+
+        lay.addStretch()
         return w
 
-    # ── Right features panel ───────────────────────────────────────────────
+    # -- Right features panel -----------------------------------------------
     def _panel_features(self):
-        w = QWidget(); w.setFixedWidth(220)
-        lay = QVBoxLayout(w); lay.setContentsMargins(0,0,0,0); lay.setSpacing(10)
+        w = QWidget(); w.setFixedWidth(250)
+        lay = QVBoxLayout(w); lay.setContentsMargins(0,0,0,0); lay.setSpacing(12)
 
-        self.btn_extract = QPushButton("Extract Features"); self.btn_extract.setEnabled(False)
-        lay.addWidget(self.btn_extract)
+        self.chk_live_features = QCheckBox("📡 Live Feature Analysis")
+        self.chk_live_features.setChecked(True)
+        self.chk_live_features.setStyleSheet("""
+            QCheckBox {
+                font-size: 14px;
+                font-weight: bold;
+                color: #a855f7;
+                padding: 8px 0px;
+            }
+            QCheckBox::indicator {
+                width: 18px; height: 18px; border-radius: 4px;
+            }
+        """)
+        lay.addWidget(self.chk_live_features)
 
         def feat_group(title, labels):
-            g = QGroupBox(title); gl = QVBoxLayout(g)
+            g = QGroupBox(title); gl = QVBoxLayout(g); gl.setSpacing(6)
             lbls = {}
             for key, text in labels.items():
-                lbl = QLabel(text); gl.addWidget(lbl); lbls[key] = lbl
+                lbl = QLabel(text)
+                lbl.setStyleSheet("color: #d1d5db; font-family: monospace; font-size: 12px;")
+                gl.addWidget(lbl)
+                lbls[key] = lbl
             lay.addWidget(g); return lbls
 
         self.sf = feat_group("Shape Features", {
-            "count": "Contours: —", "area": "Largest area: —", "circ": "Circularity: —"})
+            "count": "Contours:   --", "area": "Max Area:   --", "circ": "Circular:   --"})
         self.cf = feat_group("Color Features", {
-            "mean": "Mean BGR: —", "hue": "Dominant hue: —", "sat": "Saturation: —"})
+            "mean": "Mean BGR:   --", "hue": "Dom Hue:    --", "sat": "Saturation: --"})
         self.tf = feat_group("Texture (LBP)", {
-            "energy": "LBP energy: —", "entropy": "LBP entropy: —", "contrast": "Contrast: —"})
+            "energy": "LBP Energy: --", "entropy": "LBP Entropy:--", "contrast": "Contrast:   --"})
 
-        fg = QGroupBox("Feature Map"); fgl = QVBoxLayout(fg)
-        self.lbl_feat_img = QLabel(); self.lbl_feat_img.setFixedSize(200, 150)
+        fg = QGroupBox("Feature Heatmap"); fgl = QVBoxLayout(fg)
+        self.lbl_feat_img = QLabel(); self.lbl_feat_img.setFixedSize(220, 165)
         self.lbl_feat_img.setAlignment(Qt.AlignCenter)
-        self.lbl_feat_img.setStyleSheet("background:#111;border-radius:4px;")
+        self.lbl_feat_img.setStyleSheet("background-color: #000000; border: 1px solid #374151; border-radius: 6px;")
         fgl.addWidget(self.lbl_feat_img); lay.addWidget(fg)
 
         lay.addStretch()
         return w
 
-    # ════════════════════════════════════════════════════════════════════════
-    # Signal connections  — every control calls _reprocess immediately
-    # ════════════════════════════════════════════════════════════════════════
+    # ========================================================================
+    # Signal connections
+    # ========================================================================
 
     def _connect_signals(self):
-        # Source
         self.btn_camera.clicked.connect(self._toggle_camera)
         self.btn_load_video.clicked.connect(self._load_video)
         self.btn_load_image.clicked.connect(self._load_image)
-        self.btn_stop.clicked.connect(self._stop)
-        self.btn_capture.clicked.connect(self._capture)
 
-        # Illumination — update illumination controller then reprocess base
+        # Play/Pause control
+        self.btn_play_pause.clicked.connect(self._toggle_pause)
+
+        self.btn_capture.clicked.connect(self._capture)
         self.sl_bright.valueChanged.connect(self._on_brightness)
         self.sl_contrast.valueChanged.connect(self._on_contrast)
 
-        # Navigation buttons
         self.btn_up.clicked.connect(lambda: self._navigate("up"))
         self.btn_down.clicked.connect(lambda: self._navigate("down"))
         self.btn_left.clicked.connect(lambda: self._navigate("left"))
         self.btn_right.clicked.connect(lambda: self._navigate("right"))
         self.btn_reset.clicked.connect(lambda: self._navigate("reset"))
+        self.btn_zoom_in.clicked.connect(lambda: self._navigate("zoom_in"))
+        self.btn_zoom_out.clicked.connect(lambda: self._navigate("zoom_out"))
 
-        # Processing checkboxes and colormap — reprocess immediately
         self.chk_denoise.stateChanged.connect(self._reprocess)
         self.chk_clahe.stateChanged.connect(self._reprocess)
         self.chk_edges.stateChanged.connect(self._reprocess)
         self.cmb_cmap.currentIndexChanged.connect(self._reprocess)
 
-        # Feature extraction
-        self.btn_extract.clicked.connect(self._extract_features)
+        self.chk_live_features.stateChanged.connect(self._reprocess)
 
-    # ════════════════════════════════════════════════════════════════════════
+    # ========================================================================
     # Keyboard
-    # ════════════════════════════════════════════════════════════════════════
+    # ========================================================================
 
     def keyPressEvent(self, e: QKeyEvent):
         k = e.key()
@@ -249,45 +317,36 @@ class MainWindow(QMainWindow):
         elif k in (Qt.Key_S, Qt.Key_Down):  self._navigate("down")
         elif k in (Qt.Key_A, Qt.Key_Left):  self._navigate("left")
         elif k in (Qt.Key_D, Qt.Key_Right): self._navigate("right")
+        elif k in (Qt.Key_Plus, Qt.Key_Equal): self._navigate("zoom_in")
+        elif k == Qt.Key_Minus:             self._navigate("zoom_out")
         elif k == Qt.Key_R:                 self._navigate("reset")
         elif k == Qt.Key_Space:             self._capture()
         else: super().keyPressEvent(e)
 
-    # ════════════════════════════════════════════════════════════════════════
-    # Illumination handlers  →  rebuild base_frame then reprocess
-    # ════════════════════════════════════════════════════════════════════════
+    # ========================================================================
+    # Handlers
+    # ========================================================================
 
     def _on_brightness(self, v):
         self.lbl_bright.setText(f"{v} %")
         self.illumination.set_brightness(v / 100.0)
-        self._rebuild_base()      # re-apply illumination + nav to raw frame
+        self._rebuild_base()
 
     def _on_contrast(self, v):
         self.lbl_contrast.setText(f"{v} %")
         self.illumination.set_contrast(v / 100.0)
         self._rebuild_base()
 
-    # ════════════════════════════════════════════════════════════════════════
-    # Navigation handler  →  rebuild base_frame then reprocess
-    # ════════════════════════════════════════════════════════════════════════
-
     def _navigate(self, direction: str):
         self.navigation.move(direction)
-        x, y, tilt = self.navigation.get_state()
-        self.lbl_nav.setText(f"Position: ({x:+d}, {y:+d})")
-        self.lbl_overlay.setText(f"◉  X:{x:+d}  Y:{y:+d}  Tilt:{tilt}°")
-        self.status(f"Navigation → {direction}  |  ({x:+d}, {y:+d})")
+        x, y, tilt, zoom = self.navigation.get_state()
+        self.lbl_nav.setText(f"Pos: ({x:+d}, {y:+d})  |  Zoom: {zoom:.1f}x")
+        self.lbl_overlay.setText(f"◉ X: {x:+d}   Y: {y:+d}   Tilt: {tilt}°   Zoom: {zoom:.1f}x")
+        self.status(f"Navigation → {direction}  |  ({x:+d}, {y:+d}) | {zoom:.1f}x")
         self._rebuild_base()
 
-    # ════════════════════════════════════════════════════════════════════════
-    # Frame pipeline
-    # ════════════════════════════════════════════════════════════════════════
-
     def _rebuild_base(self):
-        """Apply illumination + navigation crop to the latest raw frame → base_frame.
-        Then immediately reprocess and update both displays."""
-        if self.raw_frame is None:
-            return
+        if self.raw_frame is None: return
         f = self.illumination.apply(self.raw_frame)
         f = self.navigation.apply_to_frame(f)
         self.base_frame = f
@@ -295,25 +354,19 @@ class MainWindow(QMainWindow):
         self._reprocess()
 
     def _reprocess(self, *_):
-        """Apply processing pipeline to base_frame → proc_frame and update right display."""
-        if self.base_frame is None:
-            return
+        if self.base_frame is None: return
         f = self.base_frame.copy()
-        if self.chk_denoise.isChecked():
-            f = self.processor.denoise(f)
-        if self.chk_clahe.isChecked():
-            f = self.processor.enhance_clahe(f)
-        if self.chk_edges.isChecked():
-            f = self.processor.detect_edges(f)
+        if self.chk_denoise.isChecked(): f = self.processor.denoise(f)
+        if self.chk_clahe.isChecked():   f = self.processor.enhance_clahe(f)
+        if self.chk_edges.isChecked():   f = self.processor.detect_edges(f)
         cmap = self.cmb_cmap.currentText()
-        if cmap != "None":
-            f = self.processor.apply_colormap(f, cmap)
+        if cmap != "None":               f = self.processor.apply_colormap(f, cmap)
+
         self.proc_frame = f
         self._show(self.lbl_proc, f)
 
-    # ════════════════════════════════════════════════════════════════════════
-    # Timer tick — only reads new frames from source
-    # ════════════════════════════════════════════════════════════════════════
+        if hasattr(self, 'chk_live_features') and self.chk_live_features.isChecked():
+            self._extract_features()
 
     def _tick(self):
         frame = None
@@ -321,6 +374,7 @@ class MainWindow(QMainWindow):
             ret, frame = self.cap.read()
             if not ret:
                 if not self.using_camera:
+                    # Looping video
                     self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     ret, frame = self.cap.read()
                 if not ret:
@@ -334,17 +388,19 @@ class MainWindow(QMainWindow):
 
         h, w = frame.shape[:2]
         fps  = self.cap.get(cv2.CAP_PROP_FPS) if self.cap else 30
-        self.lbl_info.setText(f"FPS: {fps:.0f} | Frame: {self.frame_count} | {w}×{h}")
+        self.lbl_info.setText(f"FPS: {fps:.0f}  |  Frame: {self.frame_count}  |  {w}×{h}")
 
-    # ════════════════════════════════════════════════════════════════════════
+    # ========================================================================
     # Source management
-    # ════════════════════════════════════════════════════════════════════════
+    # ========================================================================
 
     def _toggle_camera(self, checked):
         if checked:
+            # Stop any existing source before opening camera
+            self._stop()
             self.cap = cv2.VideoCapture(0)
             if not self.cap.isOpened():
-                QMessageBox.warning(self, "Camera", "No camera found — using test pattern.")
+                QMessageBox.warning(self, "Camera Error", "No camera found — using test pattern.")
                 self.cap = None; self.btn_camera.setChecked(False)
             else:
                 self.using_camera = True
@@ -353,47 +409,67 @@ class MainWindow(QMainWindow):
             self._stop()
 
     def _load_video(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Open Video", "", "Video (*.mp4 *.avi *.mov *.mkv *.wmv)")
+        path, _ = QFileDialog.getOpenFileName(self, "Open Video", "", "Video (*.mp4 *.avi *.mov *.mkv *.wmv)")
         if path:
+            self._stop()
             self.cap = cv2.VideoCapture(path)
-            if not self.cap.isOpened():
-                QMessageBox.warning(self, "Error", "Cannot open video."); return
+            if not self.cap.isOpened(): QMessageBox.warning(self, "Error", "Cannot open video."); return
             self.using_camera = False
             self._start()
 
     def _load_image(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Open Image", "", "Image (*.png *.jpg *.jpeg *.bmp *.tif)")
+        path, _ = QFileDialog.getOpenFileName(self, "Open Image", "", "Image (*.png *.jpg *.jpeg *.bmp *.tif)")
         if path:
             frame = cv2.imread(path)
-            if frame is None:
-                QMessageBox.warning(self, "Error", "Cannot open image."); return
+            if frame is None: QMessageBox.warning(self, "Error", "Cannot open image."); return
+
+            # Stop camera or video if running
             self._stop()
             self.raw_frame = frame
             self._rebuild_base()
+
             self.btn_capture.setEnabled(True)
-            self.btn_extract.setEnabled(True)
-            self.status(f"Image: {path}")
+
+            h, w = frame.shape[:2]
+            self.lbl_info.setText(f"FPS: 0 (Image)  |  Frame: 1  |  {w}×{h}")
+            self.status(f"Image loaded: {os.path.basename(path)}")
 
     def _start(self):
         self.is_running = True
         self.timer.start(33)
-        self.btn_stop.setEnabled(True)
+        self.btn_play_pause.setEnabled(True)
+        self.btn_play_pause.setText("⏸ Pause")
         self.btn_capture.setEnabled(True)
-        self.btn_extract.setEnabled(True)
+        self.btn_camera.setText("Disconnect Camera" if self.using_camera else "Connect Camera")
 
     def _stop(self):
-        self.is_running = False; self.timer.stop()
+        """Internal cleanup when switching sources or stopping playback."""
+        self.is_running = False
+        self.timer.stop()
         if self.cap: self.cap.release(); self.cap = None
         self.using_camera = False
         self.btn_camera.setChecked(False); self.btn_camera.setText("Connect Camera")
-        self.btn_stop.setEnabled(False)
-        self.status("Stopped.")
+        self.btn_play_pause.setEnabled(False)
+        self.btn_play_pause.setText("⏸ Pause")
 
-    # ════════════════════════════════════════════════════════════════════════
-    # Capture
-    # ════════════════════════════════════════════════════════════════════════
+    def _toggle_pause(self):
+        """Toggle Play/Pause state"""
+        if self.is_running:
+            # Pause playback
+            self.is_running = False
+            self.timer.stop()
+            self.btn_play_pause.setText("▶ Resume")
+            self.status("Source Paused.")
+        else:
+            # Resume playback
+            self.is_running = True
+            self.timer.start(33)
+            self.btn_play_pause.setText("⏸ Pause")
+            self.status("Source Resumed.")
+
+    # ========================================================================
+    # Capture & Extraction
+    # ========================================================================
 
     def _capture(self):
         if self.raw_frame is None: return
@@ -401,35 +477,37 @@ class MainWindow(QMainWindow):
         ts   = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         path = f"output/capture_{ts}.png"
         cv2.imwrite(path, self.raw_frame)
-        self.status(f"Saved → {path}")
-
-    # ════════════════════════════════════════════════════════════════════════
-    # Feature extraction
-    # ════════════════════════════════════════════════════════════════════════
+        self.status(f"Screenshot saved → {path}")
+        self.btn_capture.setText("✅ Saved!")
+        QTimer.singleShot(1500, lambda: self.btn_capture.setText("📷 Capture Frame"))
 
     def _extract_features(self):
         src = self.proc_frame if self.proc_frame is not None else self.base_frame
         if src is None: return
-        f = self.extractor.extract_all(src)
-        self.sf["count"].setText(f"Contours: {f['contour_count']}")
-        self.sf["area"].setText(f"Largest area: {f['largest_area']:.0f} px²")
-        self.sf["circ"].setText(f"Circularity: {f['circularity']:.3f}")
-        b, g, r = f["mean_color"]
-        self.cf["mean"].setText(f"Mean BGR: ({b:.0f},{g:.0f},{r:.0f})")
-        self.cf["hue"].setText(f"Dominant hue: {f['dominant_hue']:.1f}°")
-        self.cf["sat"].setText(f"Saturation: {f['saturation']:.1f}")
-        self.tf["energy"].setText(f"LBP energy: {f['lbp_energy']:.4f}")
-        self.tf["entropy"].setText(f"LBP entropy: {f['lbp_entropy']:.4f}")
-        self.tf["contrast"].setText(f"Contrast: {f['texture_contrast']:.2f}")
-        fm = self.extractor.get_feature_map(src)
-        self.lbl_feat_img.setPixmap(
-            self._to_pixmap(fm).scaled(
-                self.lbl_feat_img.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        self.status("Features extracted.")
 
-    # ════════════════════════════════════════════════════════════════════════
-    # Helpers
-    # ════════════════════════════════════════════════════════════════════════
+        try:
+            f = self.extractor.extract_all(src)
+            self.sf["count"].setText(f"Contours:   {f['contour_count']}")
+            self.sf["area"].setText(f"Max Area:   {f['largest_area']:.0f} px²")
+            self.sf["circ"].setText(f"Circular:   {f['circularity']:.3f}")
+
+            b, g, r = f["mean_color"]
+            self.cf["mean"].setText(f"Mean BGR:   ({b:.0f},{g:.0f},{r:.0f})")
+            self.cf["hue"].setText(f"Dom Hue:    {f['dominant_hue']:.1f}°")
+            self.cf["sat"].setText(f"Saturation: {f['saturation']:.1f}")
+
+            self.tf["energy"].setText(f"LBP Energy: {f['lbp_energy']:.4f}")
+            self.tf["entropy"].setText(f"LBP Entropy:{f['lbp_entropy']:.4f}")
+            self.tf["contrast"].setText(f"Contrast:   {f['texture_contrast']:.2f}")
+
+            # Update Heatmap
+            fm = self.extractor.get_feature_map(src)
+            self.lbl_feat_img.setPixmap(
+                self._to_pixmap(fm).scaled(
+                    self.lbl_feat_img.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+
+        except Exception as e:
+            print(f"Feature Extraction Error: {e}")
 
     def _show(self, label: QLabel, frame: np.ndarray):
         label.setPixmap(
@@ -438,8 +516,7 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _to_pixmap(frame: np.ndarray) -> QPixmap:
-        if len(frame.shape) == 2:
-            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+        if len(frame.shape) == 2: frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb.shape
         return QPixmap.fromImage(QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888))
@@ -465,32 +542,139 @@ class MainWindow(QMainWindow):
     def status(self, msg: str):
         self.status_bar.showMessage(msg)
 
-    # ════════════════════════════════════════════════════════════════════════
-    # Dark theme
-    # ════════════════════════════════════════════════════════════════════════
+    # ========================================================================
+    # Professional Dark Theme (QSS)
+    # ========================================================================
 
     def _apply_theme(self):
-        self.setStyleSheet("""
-        QMainWindow,QWidget{background:#1a1a1a;color:#e0e0e0;
-            font-family:'Segoe UI',Arial,sans-serif;font-size:12px;}
-        QGroupBox{border:1px solid #3a3a3a;border-radius:6px;margin-top:8px;
-            padding:6px;font-weight:bold;color:#aaa;}
-        QGroupBox::title{subcontrol-origin:margin;left:10px;padding:0 4px;}
-        QPushButton{background:#2d2d2d;border:1px solid #444;border-radius:5px;
-            padding:6px 10px;color:#e0e0e0;}
-        QPushButton:hover{background:#3a3a3a;}
-        QPushButton:pressed{background:#1e6fa0;}
-        QPushButton:checked{background:#1e6fa0;border-color:#2a90d0;}
-        QPushButton:disabled{color:#555;}
-        QSlider::groove:horizontal{height:4px;background:#333;border-radius:2px;}
-        QSlider::handle:horizontal{background:#2a90d0;width:14px;height:14px;
-            margin:-5px 0;border-radius:7px;}
-        QSlider::sub-page:horizontal{background:#2a90d0;border-radius:2px;}
-        QComboBox{background:#2d2d2d;border:1px solid #444;border-radius:4px;padding:4px;}
-        QComboBox::drop-down{border:none;}
-        QCheckBox::indicator{width:14px;height:14px;border:1px solid #555;
-            border-radius:3px;background:#2d2d2d;}
-        QCheckBox::indicator:checked{background:#2a90d0;border-color:#2a90d0;}
-        QLabel{color:#ccc;}
-        QStatusBar{background:#111;color:#888;border-top:1px solid #333;}
-        """)
+        style = """
+        QMainWindow, QWidget {
+            background-color: #0b0f19;
+            color: #e5e7eb;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            font-size: 13px;
+        }
+        
+        QGroupBox {
+            background-color: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 8px;
+            margin-top: 16px;
+            padding: 16px 12px 10px 12px;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            left: 12px;
+            padding: 2px 8px;
+            color: #60a5fa;
+            font-weight: bold;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background-color: #1f2937;
+            border-radius: 4px;
+        }
+
+        QPushButton {
+            background-color: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 6px;
+            padding: 8px 14px;
+            color: #f3f4f6;
+            font-weight: 600;
+        }
+        QPushButton:hover {
+            background-color: #3b82f6;
+            border-color: #3b82f6;
+            color: #ffffff;
+        }
+        QPushButton:pressed {
+            background-color: #2563eb;
+            border-color: #2563eb;
+        }
+        QPushButton:checked {
+            background-color: #10b981;
+            border-color: #10b981;
+        }
+        QPushButton:disabled {
+            background-color: #111827;
+            color: #4b5563;
+            border-color: #1f2937;
+        }
+
+        QSlider::groove:horizontal {
+            height: 6px;
+            background: #1f2937;
+            border-radius: 3px;
+        }
+        QSlider::sub-page:horizontal {
+            background: #3b82f6;
+            border-radius: 3px;
+        }
+        QSlider::handle:horizontal {
+            background: #ffffff;
+            border: 2px solid #3b82f6;
+            width: 16px;
+            height: 16px;
+            margin: -5px 0;
+            border-radius: 8px;
+        }
+        QSlider::handle:horizontal:hover {
+            background: #60a5fa;
+            border-color: #ffffff;
+            transform: scale(1.1);
+        }
+
+        QComboBox {
+            background-color: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 6px;
+            padding: 6px 10px;
+            color: #e5e7eb;
+        }
+        QComboBox:hover {
+            border-color: #3b82f6;
+        }
+        QComboBox::drop-down {
+            border: none;
+            padding-right: 10px;
+        }
+        QComboBox QAbstractItemView {
+            background-color: #1f2937;
+            selection-background-color: #3b82f6;
+            color: #ffffff;
+            border: 1px solid #374151;
+            border-radius: 4px;
+        }
+
+        QCheckBox {
+            spacing: 10px;
+        }
+        QCheckBox::indicator {
+            width: 18px;
+            height: 18px;
+            background-color: #1f2937;
+            border: 2px solid #374151;
+            border-radius: 4px;
+        }
+        QCheckBox::indicator:hover {
+            border-color: #3b82f6;
+        }
+        QCheckBox::indicator:checked {
+            background-color: #3b82f6;
+            border-color: #3b82f6;
+        }
+
+        QLabel {
+            color: #d1d5db;
+        }
+        
+        QStatusBar {
+            background-color: #111827;
+            color: #9ca3af;
+            border-top: 1px solid #1f2937;
+            padding-left: 8px;
+        }
+        """
+        self.setStyleSheet(style)

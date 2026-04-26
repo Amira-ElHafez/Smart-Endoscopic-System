@@ -11,20 +11,23 @@ class FeatureExtractor:
         return {**self._shape(frame), **self._color(frame), **self._texture(frame)}
 
     def get_feature_map(self, frame: np.ndarray) -> np.ndarray:
+        """
+        Generates a true Heatmap highlighting areas of high texture/edges (like vessels or polyps).
+        """
         gray = self._gray(frame)
-        _, thresh = cv2.threshold(cv2.GaussianBlur(gray, (5, 5), 0), 40, 255, cv2.THRESH_BINARY)
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        vis = frame.copy() if len(frame.shape) == 3 else cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
-        cv2.drawContours(vis, contours, -1, (0, 255, 100), 2)
-        if contours:
-            largest = max(contours, key=cv2.contourArea)
-            cv2.drawContours(vis, [largest], -1, (0, 80, 255), 3)
-            M = cv2.moments(largest)
-            if M["m00"] != 0:
-                cx = int(M["m10"] / M["m00"])
-                cy = int(M["m01"] / M["m00"])
-                cv2.circle(vis, (cx, cy), 6, (255, 255, 0), -1)
-        return vis
+
+        # 1. Calculate texture and edge intensity using Sobel
+        dx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+        dy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+        magnitude = cv2.magnitude(dx, dy)
+
+        # 2. Normalize to 0-255 range for visual mapping
+        mag_norm = cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+
+        # 3. Apply JET colormap to create a real "Thermal/Medical Heatmap"
+        heatmap = cv2.applyColorMap(mag_norm, cv2.COLORMAP_JET)
+
+        return heatmap
 
     def _shape(self, frame):
         gray = self._gray(frame)
