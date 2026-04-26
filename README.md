@@ -1,34 +1,34 @@
 # Intelligent Endoscopic Assistance System (IEAS) 🩺🔬
 
 ## 📌 Project Overview
-[cite_start]This project is a functional simulation of a modern **Medical Endoscope System**, developed as part of the **Medical Equipment (II) [SBE3220]** course[cite: 1, 3, 4]. [cite_start]The system integrates real-time video stream manipulation, illumination control, and advanced digital image processing to assist clinicians in visualizing and analyzing internal body cavities[cite: 7, 19, 31].
+This project is a functional simulation of a modern **Medical Endoscope System**, developed as part of the **Medical Equipment (II) [SBE3220]** course. The system integrates real-time video stream manipulation, illumination control, and advanced digital image processing to assist clinicians in visualizing and analyzing internal body cavities.
 
-[cite_start]Built using **Python**, **OpenCV**, and **PyQt5**, the application provides a professional GUI that simulates the physical controls of an endoscopic insertion tube and light source, alongside automated feature extraction for diagnostic support[cite: 27, 34].
+Built using **Python**, **OpenCV**, and **PyQt5**, the application provides a professional GUI that simulates the physical controls of an endoscopic insertion tube and light source, alongside automated feature extraction for diagnostic support.
 
 ---
 
 ## ✨ Key Features
 
 ### 1. Imaging & Navigation Subsystem 🕹️
-* [cite_start]**Multi-Source Input:** Supports live camera feeds, video file playback, and static image analysis[cite: 9, 10, 19].
-* [cite_start]**Virtual Insertion Tube:** Simulates 4-way movement (Pan/Tilt) and dynamic Zoom (1.0x to 3.0x) using keyboard (WASD/Arrows) or GUI controls[cite: 11, 14].
-* [cite_start]**Real-time Display:** Dual-view interface showing the raw camera feed alongside the processed medical output[cite: 18, 19].
+* **Multi-Source Input:** Supports live camera feeds, video file playback, and static image analysis.
+* **Virtual Insertion Tube:** Simulates 4-way movement (Pan/Tilt) and dynamic Zoom (1.0x to 3.0x) using keyboard (WASD/Arrows) or GUI controls.
+* **Real-time Display:** Dual-view interface showing the raw camera feed alongside the processed medical output.
 
 ### 2. Illumination Control 💡
-* [cite_start]**Intensity Modulation:** Simulates LED light source control by adjusting brightness and contrast levels to optimize visualization in different anatomical environments[cite: 6, 7, 16].
+* **Intensity Modulation:** Simulates LED light source control by adjusting brightness and contrast levels to optimize visualization in different anatomical environments.
 
 ### 3. Advanced Image Processing (Bonus) 🛠️
-[cite_start]To enhance diagnostic clarity, the system includes a modular processing pipeline[cite: 31]:
-* [cite_start]**Denoising:** Gaussian filtering to reduce sensor noise[cite: 32].
-* [cite_start]**Contrast Boost:** Implementation of **CLAHE** (Contrast Limited Adaptive Histogram Equalization) for better visibility of tissue textures[cite: 33].
+To enhance diagnostic clarity, the system includes a modular processing pipeline:
+* **Denoising:** Gaussian filtering to reduce sensor noise.
+* **Contrast Boost:** Implementation of **CLAHE** (Contrast Limited Adaptive Histogram Equalization) for better visibility of tissue textures.
 * **Edge Detection:** Canny edge detection to highlight vessel boundaries or lesions.
 * **Pseudo-Coloring:** Multiple colormaps (Jet, Hot, Cool, Bone, HSV) to aid in thermal/medical heatmap visualization.
 
 ### 4. Intelligent Feature Extraction 🧠
-[cite_start]The system automatically extracts and displays quantitative data from the feed[cite: 34]:
-* [cite_start]**Shape Features:** Contour counting, largest area detection, and circularity metrics[cite: 35].
-* [cite_start]**Color Features:** Mean BGR values, dominant hue detection, and saturation analysis[cite: 36].
-* [cite_start]**Texture Analysis:** Local Binary Patterns (LBP) calculation, providing Energy, Entropy, and Contrast data[cite: 37].
+The system automatically extracts and displays quantitative data from the feed]:
+* **Shape Features:** Contour counting, largest area detection, and circularity metrics.
+* **Color Features:** Mean BGR values, dominant hue detection, and saturation analysis.
+* **Texture Analysis:** Local Binary Patterns (LBP) calculation, providing Energy, Entropy, and Contrast data.
 * **Heatmap Generation:** A specialized texture-based heatmap highlighting areas of high visual interest (e.g., polyps or vessels).
 
 ---
