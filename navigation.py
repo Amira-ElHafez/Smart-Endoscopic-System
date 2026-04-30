@@ -9,7 +9,7 @@ import numpy as np
 
 class NavigationController:
     STEP = 15      # pixels per pan keypress
-    MAX_PAN = 120  # maximum offset from center
+    MAX_PAN = 2000 # essentially unlimited panning (was 120)
     TILT_STEP = 5
     MAX_TILT = 30
 
@@ -50,30 +50,39 @@ class NavigationController:
     def apply_to_frame(self, frame: np.ndarray) -> np.ndarray:
         """
         Simulate navigation by cropping a shifted/scaled window and resizing back.
+        Panning is strictly clamped to the image boundaries so no repeating borders are shown.
         """
         h, w = frame.shape[:2]
-        margin = self.MAX_PAN + 10
-
-        # Pad frame so we can shift without going out of bounds
-        padded = cv2.copyMakeBorder(
-            frame, margin, margin, margin, margin,
-            cv2.BORDER_REFLECT
-        )
 
         # Calculate new crop dimensions based on zoom level
         new_h = int(h / self.zoom)
         new_w = int(w / self.zoom)
 
-        # Calculate center point considering pan offsets
-        center_y = margin + (h // 2) + self.pan_y
-        center_x = margin + (w // 2) + self.pan_x
+        # The maximum pan from the center so that the edge of the crop hits the edge of the frame
+        max_pan_x = max(0, (w - new_w) // 2)
+        max_pan_y = max(0, (h - new_h) // 2)
+
+        # Clamp internal pan offsets so we never go past the actual image boundaries
+        self.pan_x = max(-max_pan_x, min(max_pan_x, self.pan_x))
+        self.pan_y = max(-max_pan_y, min(max_pan_y, self.pan_y))
 
         # Calculate crop start points
-        y1 = max(0, center_y - (new_h // 2))
-        x1 = max(0, center_x - (new_w // 2))
+        center_y = (h // 2) + self.pan_y
+        center_x = (w // 2) + self.pan_x
+
+        y1 = center_y - (new_h // 2)
+        x1 = center_x - (new_w // 2)
+        y2 = y1 + new_h
+        x2 = x1 + new_w
+
+        # Ensure we don't go out of bounds due to integer division math
+        y1 = max(0, y1)
+        x1 = max(0, x1)
+        y2 = min(h, y2)
+        x2 = min(w, x2)
 
         # Perform the crop
-        cropped = padded[y1:y1 + new_h, x1:x1 + new_w]
+        cropped = frame[y1:y2, x1:x2]
 
         # Resize back to original size to create the zoom effect
         cropped = cv2.resize(cropped, (w, h), interpolation=cv2.INTER_LINEAR)

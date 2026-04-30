@@ -26,5 +26,6 @@ class IlluminationController:
         alpha scales pixel values; beta shifts them.
         """
         beta = (self.brightness - 1.0) * 80.0
-        result = frame.astype(np.float32) * self.contrast + beta
-        return np.clip(result, 0, 255).astype(np.uint8)
+        # result = frame.astype(np.float32) * self.contrast + beta
+        return cv2.convertScaleAbs(frame, alpha=self.contrast, beta=beta)
+        # return np.clip(result, 0, 255).astype(np.uint8)s

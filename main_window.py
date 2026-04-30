@@ -9,7 +9,7 @@ import datetime
 import os
 
 from PyQt5.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QSlider, QGroupBox, QComboBox,
     QStatusBar, QGridLayout, QCheckBox, QFileDialog, QMessageBox,
     QSizePolicy
@@ -21,6 +21,7 @@ from illumination      import IlluminationController
 from image_processor   import ImageProcessor
 from navigation        import NavigationController
 from feature_extractor import FeatureExtractor
+from gi_classifier     import GIClassifier, CLASS_SEVERITY, SEVERITY_COLORS, CLASS_DISPLAY
 
 
 class MainWindow(QMainWindow):
@@ -46,6 +47,11 @@ class MainWindow(QMainWindow):
         self.raw_frame  = None
         self.base_frame = None          # reprocessed when illum/nav changes
         self.proc_frame = None          # reprocessed when proc options change
+
+        # -- AI classifier state -----------------------------------------------
+        self.classifier     = GIClassifier()
+        self._clf_loaded    = False
+        self._auto_classify_counter = 0   # throttle: run every N ticks
 
         self._build_ui()
         self._apply_theme()
@@ -196,7 +202,7 @@ class MainWindow(QMainWindow):
             lbl_hdr.setStyleSheet("color: #9ca3af; font-size: 12px; font-weight: bold; letter-spacing: 1px;")
 
             lbl_vid = QLabel(); lbl_vid.setAlignment(Qt.AlignCenter)
-            lbl_vid.setMinimumSize(480, 360)
+            lbl_vid.setFixedSize(640, 480)
 
             lbl_vid.setStyleSheet("""
                 background-color: #000000;
@@ -273,6 +279,66 @@ class MainWindow(QMainWindow):
         self.lbl_feat_img.setStyleSheet("background-color: #000000; border: 1px solid #374151; border-radius: 6px;")
         fgl.addWidget(self.lbl_feat_img); lay.addWidget(fg)
 
+        # ── AI Classification Panel ──────────────────────────────────────────
+        ag = QGroupBox("🤖 AI Classification"); agl = QVBoxLayout(ag)
+
+        self.btn_load_model = QPushButton("Load AI Model")
+        self.btn_load_model.setStyleSheet(
+            "background-color:#6366f1; border:none; border-radius:6px; padding:8px;")
+        agl.addWidget(self.btn_load_model)
+
+        self.btn_classify = QPushButton("🔬 Classify Frame")
+        self.btn_classify.setEnabled(False)
+        self.btn_classify.setStyleSheet(
+            "background-color:#8b5cf6; border:none; border-radius:6px; padding:8px;")
+        agl.addWidget(self.btn_classify)
+
+        self.chk_auto_classify = QCheckBox("⚡ Auto-Classify (live)")
+        self.chk_auto_classify.setEnabled(False)
+        self.chk_auto_classify.setStyleSheet("""
+            QCheckBox { font-size:13px; font-weight:bold; color:#a78bfa; padding:4px 0; }
+            QCheckBox::indicator { width:16px; height:16px; border-radius:4px; }
+        """)
+        agl.addWidget(self.chk_auto_classify)
+
+        # Result: class name
+        self.lbl_clf_class = QLabel("Class: —")
+        self.lbl_clf_class.setWordWrap(True)
+        self.lbl_clf_class.setStyleSheet(
+            "color:#f3f4f6; font-size:14px; font-weight:bold; padding:6px 0 2px 0;")
+        agl.addWidget(self.lbl_clf_class)
+
+        # Result: severity tag
+        self.lbl_clf_severity = QLabel("")
+        self.lbl_clf_severity.setAlignment(Qt.AlignCenter)
+        self.lbl_clf_severity.setFixedHeight(22)
+        self.lbl_clf_severity.setStyleSheet(
+            "border-radius:4px; font-size:11px; font-weight:bold; color:#fff;")
+        agl.addWidget(self.lbl_clf_severity)
+
+        # Confidence bar (using a styled QLabel as simple bar)
+        conf_row = QHBoxLayout()
+        conf_row.addWidget(QLabel("Confidence:"))
+        self.lbl_clf_conf = QLabel("— %")
+        self.lbl_clf_conf.setAlignment(Qt.AlignRight)
+        self.lbl_clf_conf.setStyleSheet("color:#60a5fa; font-weight:bold;")
+        conf_row.addWidget(self.lbl_clf_conf)
+        agl.addLayout(conf_row)
+
+        # Visual confidence bar
+        self.lbl_conf_bar = QLabel()
+        self.lbl_conf_bar.setFixedHeight(8)
+        self.lbl_conf_bar.setStyleSheet(
+            "background-color:#1f2937; border-radius:4px;")
+        agl.addWidget(self.lbl_conf_bar)
+
+        # Status label
+        self.lbl_clf_status = QLabel("Model not loaded")
+        self.lbl_clf_status.setStyleSheet("color:#6b7280; font-size:11px;")
+        agl.addWidget(self.lbl_clf_status)
+
+        lay.addWidget(ag)
+
         lay.addStretch()
         return w
 
@@ -306,6 +372,10 @@ class MainWindow(QMainWindow):
         self.cmb_cmap.currentIndexChanged.connect(self._reprocess)
 
         self.chk_live_features.stateChanged.connect(self._reprocess)
+
+        # AI classification
+        self.btn_load_model.clicked.connect(self._load_ai_model)
+        self.btn_classify.clicked.connect(self._classify_frame)
 
     # ========================================================================
     # Keyboard
@@ -389,6 +459,15 @@ class MainWindow(QMainWindow):
         h, w = frame.shape[:2]
         fps  = self.cap.get(cv2.CAP_PROP_FPS) if self.cap else 30
         self.lbl_info.setText(f"FPS: {fps:.0f}  |  Frame: {self.frame_count}  |  {w}×{h}")
+
+        # Auto-classify throttle (~1 per second at 30 fps)
+        if (self._clf_loaded
+                and hasattr(self, 'chk_auto_classify')
+                and self.chk_auto_classify.isChecked()):
+            self._auto_classify_counter += 1
+            if self._auto_classify_counter >= 30:
+                self._auto_classify_counter = 0
+                self._classify_frame()
 
     # ========================================================================
     # Source management
@@ -508,6 +587,68 @@ class MainWindow(QMainWindow):
 
         except Exception as e:
             print(f"Feature Extraction Error: {e}")
+
+    # ========================================================================
+    # AI Classification
+    # ========================================================================
+
+    def _load_ai_model(self):
+        """Load the Keras model (may take a few seconds on first run)."""
+        self.lbl_clf_status.setText("Loading model…")
+        self.lbl_clf_status.setStyleSheet("color:#f59e0b; font-size:11px;")
+        QApplication.processEvents()          # repaint before blocking load
+
+        ok = self.classifier.load()
+        if ok:
+            self._clf_loaded = True
+            self.btn_classify.setEnabled(True)
+            self.chk_auto_classify.setEnabled(True)
+            self.btn_load_model.setText("✅ Model Loaded")
+            self.btn_load_model.setEnabled(False)
+            self.lbl_clf_status.setText(
+                f"Ready  •  input {self.classifier.input_size[0]}×{self.classifier.input_size[1]}")
+            self.lbl_clf_status.setStyleSheet("color:#10b981; font-size:11px;")
+            self.status("AI model loaded successfully.")
+        else:
+            QMessageBox.warning(self, "Model Error", self.classifier.error or "Unknown error")
+            self.lbl_clf_status.setText("Load failed")
+            self.lbl_clf_status.setStyleSheet("color:#ef4444; font-size:11px;")
+
+    def _classify_frame(self):
+        """Run inference on the current processed frame."""
+        src = self.proc_frame if self.proc_frame is not None else self.base_frame
+        if src is None or not self._clf_loaded:
+            return
+        try:
+            cls_name, conf, _ = self.classifier.classify(src)
+            self._update_classification_ui(cls_name, conf)
+        except Exception as e:
+            self.lbl_clf_class.setText(f"Error: {e}")
+            print(f"Classification error: {e}")
+
+    def _update_classification_ui(self, cls_name: str, confidence: float):
+        """Refresh the classification result widgets."""
+        display = CLASS_DISPLAY.get(cls_name, cls_name)
+        severity = CLASS_SEVERITY.get(cls_name, "normal")
+        color = SEVERITY_COLORS.get(severity, "#6b7280")
+        pct = confidence * 100
+
+        self.lbl_clf_class.setText(display)
+        self.lbl_clf_class.setStyleSheet(
+            f"color:{color}; font-size:14px; font-weight:bold; padding:6px 0 2px 0;")
+
+        sev_label = severity.upper()
+        self.lbl_clf_severity.setText(f"  {sev_label}  ")
+        self.lbl_clf_severity.setStyleSheet(
+            f"background-color:{color}; border-radius:4px; "
+            f"font-size:11px; font-weight:bold; color:#fff; padding:2px 8px;")
+
+        self.lbl_clf_conf.setText(f"{pct:.1f} %")
+
+        bar_width = max(1, int(self.lbl_conf_bar.parent().width() * confidence * 0.9))
+        self.lbl_conf_bar.setFixedWidth(bar_width)
+        self.lbl_conf_bar.setStyleSheet(
+            f"background-color:{color}; border-radius:4px;")
 
     def _show(self, label: QLabel, frame: np.ndarray):
         label.setPixmap(

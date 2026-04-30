@@ -31,6 +31,12 @@ The system automatically extracts and displays quantitative data from the feed]:
 * **Texture Analysis:** Local Binary Patterns (LBP) calculation, providing Energy, Entropy, and Contrast data.
 * **Heatmap Generation:** A specialized texture-based heatmap highlighting areas of high visual interest (e.g., polyps or vessels).
 
+### 5. AI-Powered GI Classification 🧬
+* **Deep Learning Model:** Integrates a pre-trained Keras model (`kvasir_gi_model.keras`) trained on the Kvasir GI dataset.
+* **8-Class Prediction:** Classifies frames into anatomical landmarks (cecum, pylorus, z-line), pathological findings (esophagitis, polyps, ulcerative colitis), and procedure artifacts (dyed polyps, resection margins).
+* **Severity Color-Coding:** Results are color-coded — green (normal), red (pathological), yellow (procedure).
+* **Live & On-Demand:** Supports one-click classification and continuous auto-classify mode (~1 fps).
+
 ---
 
 ## 🛠️ System Architecture
@@ -40,6 +46,7 @@ The project is structured into modular components for scalability:
 * `feature_extractor.py`: Handles mathematical analysis of shape, color, and texture.
 * `navigation.py`: Manages the mathematical transformations for pan, tilt, and zoom.
 * `illumination.py`: Simulates the light source intensity logic.
+* `gi_classifier.py`: AI-powered GI disease classification using a pre-trained Keras model.
 
 ---
 
@@ -50,12 +57,13 @@ The project is structured into modular components for scalability:
 * OpenCV (`opencv-python`)
 * PyQt5
 * NumPy
+* TensorFlow (`tensorflow` or `tensorflow-cpu`)
 
 ### Installation
 
 1.  **Install dependencies:**
     ```bash
-    pip install opencv-python PyQt5 numpy
+    pip install opencv-python PyQt5 numpy tensorflow
     ```
 2.  **Run the application:**
     ```bash
