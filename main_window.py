@@ -438,6 +438,15 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'chk_live_features') and self.chk_live_features.isChecked():
             self._extract_features()
 
+        # For static images or paused videos, the timer is stopped (is_running = False).
+        # We should auto-classify immediately upon reprocessing (like changing contrast or zooming)
+        # because the main _tick() loop is not running.
+        if (self._clf_loaded 
+            and hasattr(self, 'chk_auto_classify') 
+            and self.chk_auto_classify.isChecked()
+            and getattr(self, 'is_running', False) == False):
+            self._classify_frame()
+
     def _tick(self):
         frame = None
         if self.cap and self.cap.isOpened():

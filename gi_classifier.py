@@ -138,8 +138,10 @@ class GIClassifier:
     # ----- internal ----------------------------------------------------------
 
     def _preprocess(self, frame: np.ndarray) -> np.ndarray:
-        """Resize + normalise a BGR frame for the model."""
+        """Resize a BGR frame for the model."""
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         resized = cv2.resize(rgb, self.input_size, interpolation=cv2.INTER_AREA)
-        arr = resized.astype(np.float32) / 255.0
+        # Note: We do NOT divide by 255.0 here. The Keras model was trained with
+        # MobileNetV2 preprocessing layers built-in, so it expects pixels in the range [0, 255].
+        arr = resized.astype(np.float32)
         return np.expand_dims(arr, axis=0)                  # (1, H, W, 3)
